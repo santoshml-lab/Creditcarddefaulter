@@ -1,63 +1,47 @@
+
+
 import streamlit as st
 import pandas as pd
 import joblib
 
-# ---------- PAGE CONFIG ----------
-st.set_page_config(page_title="Fraud AI", page_icon="💳", layout="centered")
+# ---------- CONFIG ----------
+st.set_page_config(page_title="Fraud AI", page_icon="💳")
 
-# ---------- LOAD MODEL ----------
+# ---------- LOAD ----------
 model = joblib.load("xgb_model.pkl")
 cols = joblib.load("columns.pkl")
 
-# ---------- CUSTOM CSS ----------
-st.markdown("""
-<style>
-.big-title {
-    font-size: 40px;
-    font-weight: bold;
-    text-align: center;
-}
-.sub-text {
-    text-align: center;
-    color: grey;
-}
-.card {
-    padding: 20px;
-    border-radius: 12px;
-    background-color: #f5f5f5;
-}
-</style>
-""", unsafe_allow_html=True)
+st.title("💳 Fraud Detection System")
+st.markdown("Real-time risk analysis of transactions 🚀")
 
-# ---------- HEADER ----------
-st.markdown('<div class="big-title">💳 Fraud Detection AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-text">Smart system to detect risky transactions 🚀</div>', unsafe_allow_html=True)
-
-st.write("")
-
-# ---------- INPUT CARD ----------
-st.markdown('<div class="card">', unsafe_allow_html=True)
-
+# ---------- INPUTS ----------
 st.subheader("🔍 Enter Transaction Details")
 
 col1, col2 = st.columns(2)
 
 with col1:
     amt = st.number_input("💰 Amount", min_value=0.0)
-    gender = st.selectbox("👤 Gender", ["M", "F"])
+    category = st.selectbox("🛒 Category", [
+        "shopping_pos","shopping_net","food_dining",
+        "gas_transport","grocery_pos","travel"
+    ])
+    gender = st.selectbox("👤 Gender", ["M","F"])
 
 with col2:
-    category = st.selectbox("🛒 Category", ["shopping", "food", "travel"])
+    merchant = st.text_input("🏪 Merchant Name")
+    hour = st.slider("🕒 Transaction Hour", 0, 23, 12)
+    distance = st.number_input("📍 Distance from Home (km)", min_value=0.0)
     city_pop = st.number_input("🏙 City Population", min_value=0)
 
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------- CREATE INPUT ----------
+# ---------- CREATE DATA ----------
 input_dict = {
     "amt": amt,
-    "gender": gender,
     "category": category,
-    "city_pop": city_pop
+    "merchant": merchant,
+    "gender": gender,
+    "city_pop": city_pop,
+    "unix_time": hour * 3600,  # approx
+    "distance": distance
 }
 
 input_df = pd.DataFrame([input_dict])
@@ -66,34 +50,26 @@ input_df = pd.DataFrame([input_dict])
 input_df = pd.get_dummies(input_df)
 input_df = input_df.reindex(columns=cols, fill_value=0)
 
-# ---------- BUTTON ----------
-if st.button("🚀 Check Fraud Risk"):
+# ---------- PREDICT ----------
+if st.button("🚀 Check Risk"):
 
     prob = model.predict_proba(input_df)[0][1]
 
-    st.write("")
     st.subheader("📊 Result")
 
-    # ---------- RISK BAR ----------
     st.progress(int(prob * 100))
-
     st.metric("Fraud Probability", f"{prob:.2f}")
 
-    # ---------- DECISION ----------
-    if prob > 0.5:
+    if prob > 0.6:
         st.error("🚨 High Fraud Risk")
     elif prob > 0.3:
         st.warning("⚠️ Medium Risk")
     else:
         st.success("✅ Safe Transaction")
 
-    # ---------- EXTRA INSIGHT ----------
+    # ---------- INSIGHT ----------
     st.write("### 💡 Insight")
-    if prob > 0.5:
-        st.write("Transaction shows strong fraud patterns. Immediate review recommended.")
+    if prob > 0.6:
+        st.write("Unusual transaction pattern detected (amount/location/time).")
     else:
-        st.write("Transaction appears normal based on learned patterns.")
-
-# ---------- FOOTER ----------
-st.markdown("---")
-st.markdown("Made with ❤️ using Machine Learning")
+        st.write("Transaction aligns with normal behavior patterns.")
