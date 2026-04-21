@@ -4,8 +4,7 @@ A real-time machine learning system that detects fraudulent financial transactio
 
 ---
 
-## 🚀 Live Demo
-👉 [Add your Streamlit app link here]
+
 
 ---
 
