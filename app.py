@@ -1,91 +1,103 @@
-
 import streamlit as st
-import pandas as pd
-import joblib
-import plotly.graph_objects as go
+import requests
+import math
 
-# ---------- CONFIG ----------
-st.set_page_config(page_title="FinGuard AI", page_icon="🛡️", layout="centered")
+API_URL = "https://defaulter-credit-5.onrender.com/predict"
 
-# ---------- LOAD ----------
-model = joblib.load("xgb_model.pkl")
-cols = joblib.load("columns.pkl")
+st.set_page_config(page_title="Fraud Risk Dashboard", layout="wide")
 
 # ---------- HEADER ----------
-st.title("🛡️ FinGuard AI - Fraud Detection System")
-st.caption("AI-powered real-time transaction risk analysis")
+st.title("💳 Fraud Risk Dashboard")
+st.caption("Real-time risk scoring for transactions")
 
-st.write("---")
+# ---------- INPUTS ----------
+with st.sidebar:
+    st.header("🧾 Transaction Inputs")
 
-# ---------- INPUT ----------
-st.subheader("Enter Transaction Details")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    amt = st.number_input("💰 Transaction Amount", min_value=0.0)
+    amt = st.number_input("💰 Amount", min_value=0.0, value=100.0)
     category = st.selectbox("🛒 Category", [
-        "shopping_net","shopping_pos","food_dining",
-        "gas_transport","grocery_pos","travel"
+        "food_dining","gas_transport","grocery_net","grocery_pos",
+        "health_fitness","home","kids_pets","misc_net","misc_pos",
+        "personal_care","shopping_net","shopping_pos","travel"
     ])
     gender = st.selectbox("👤 Gender", ["M","F"])
+    city_pop = st.number_input("🏙️ City Population", min_value=1, value=50000)
 
-with col2:
-    merchant = st.text_input("🏪 Merchant Name")
-    city_pop = st.number_input("🏙 City Population", min_value=0)
-    distance = st.number_input("📍 Distance from Home (km)", min_value=0.0)
+    st.markdown("---")
+    st.subheader("📍 Location")
 
-st.write("---")
+    lat = st.number_input("Your Latitude", value=28.6)
+    long = st.number_input("Your Longitude", value=77.2)
+    merch_lat = st.number_input("Merchant Latitude", value=28.61)
+    merch_long = st.number_input("Merchant Longitude", value=77.21)
 
-# ---------- PREPROCESS ----------
-input_dict = {
-    "amt": amt,
-    "category": category,
-    "gender": gender,
-    "merchant": merchant,
-    "city_pop": city_pop,
-    "distance": distance
-}
+    run = st.button("🔍 Analyze")
 
-df = pd.DataFrame([input_dict])
-df = pd.get_dummies(df)
-df = df.reindex(columns=cols, fill_value=0)
+# ---------- HELPER ----------
+def calc_distance(lat, long, mlat, mlong):
+    return math.sqrt((lat-mlat)**2 + (long-mlong)**2)
 
-# ---------- PREDICTION ----------
-if st.button("🔍 Analyze Risk"):
+# ---------- MAIN DASHBOARD ----------
+if run:
+    data = {
+        "amt": amt,
+        "category": category,
+        "gender": gender,
+        "city_pop": city_pop,
+        "lat": lat,
+        "long": long,
+        "merch_lat": merch_lat,
+        "merch_long": merch_long
+    }
 
-    prob = model.predict_proba(df)[0][1]
-    risk_percent = prob * 100
+    res = requests.post(API_URL, json=data)
 
-    st.subheader("📊 Risk Analysis Result")
+    if res.status_code == 200:
+        result = res.json()
+        prob = result["probability"]
+        risk = result["risk"]
 
-    # ---------- GAUGE METER ----------
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=risk_percent,
-        title={'text': "Fraud Risk Level (%)"},
-        gauge={
-            'axis': {'range': [0, 100]},
-            'bar': {'color': "red"},
-            'steps': [
-                {'range': [0, 30], 'color': "green"},
-                {'range': [30, 60], 'color': "yellow"},
-                {'range': [60, 100], 'color': "red"}
-            ]
-        }
-    ))
+        distance = calc_distance(lat, long, merch_lat, merch_long)
 
-    st.plotly_chart(fig, use_container_width=True)
+        # ---------- TOP METRICS ----------
+        col1, col2, col3 = st.columns(3)
 
-    # ---------- DECISION ----------
-    if prob > 0.6:
-        st.error("🚨 HIGH RISK: Fraud Likely Detected")
-        st.write("Immediate verification recommended.")
-    elif prob > 0.3:
-        st.warning("⚠️ MEDIUM RISK: Suspicious Activity")
-        st.write("Manual review suggested.")
+        col1.metric("💰 Amount", f"₹{amt}")
+        col2.metric("📏 Distance", f"{distance:.2f}")
+        col3.metric("📊 Probability", f"{prob:.2f}")
+
+        st.markdown("---")
+
+        # ---------- RISK STATUS ----------
+        if risk == "HIGH":
+            st.error("🚨 HIGH FRAUD RISK")
+        elif risk == "MEDIUM":
+            st.warning("⚠️ MEDIUM FRAUD RISK")
+        else:
+            st.success("✅ LOW FRAUD RISK")
+
+        # ---------- INSIGHTS ----------
+        st.subheader("🧠 Insights")
+
+        if distance > 20:
+            st.write("📍 Unusual location detected (far transaction)")
+        if amt > 5000:
+            st.write("💰 High transaction amount")
+        if city_pop < 1000:
+            st.write("🏙️ Small city — unusual pattern")
+
+        # ---------- SUMMARY CARD ----------
+        st.markdown("---")
+        st.subheader("📌 Summary")
+
+        st.info(f"""
+        Transaction Category: {category}  
+        Gender: {gender}  
+        City Population: {city_pop}  
+
+        👉 Model Confidence: {prob:.2f}  
+        👉 Final Risk Level: **{risk}**
+        """)
+
     else:
-        st.success("✅ LOW RISK: Transaction Safe")
-
-    st.write("---")
-    st.caption("Powered by XGBoost + Behavioral Pattern Analysis")
+        st.error("❌ API Error — check backend")
