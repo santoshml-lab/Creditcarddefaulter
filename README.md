@@ -25,7 +25,8 @@ Component
 Link
 🌐 API
 https://defaulter-credit-5.onrender.com/
-📊 Dashboard
+📊 Dashboard 
+https://creditcarddefaulter-iptgn6vyth4zfg6uqcitto.streamlit.app/
 
 
 
