@@ -1,15 +1,58 @@
-
 import streamlit as st
 import requests
 import math
+import plotly.graph_objects as go
 
 API_URL = "https://defaulter-credit-5.onrender.com/predict"
 
 st.set_page_config(page_title="Fraud Risk Dashboard", layout="wide")
 
+# ---------- MAP FUNCTION ----------
+def show_map(lat, long, merch_lat, merch_long, risk):
+
+    color = "green" if risk == "LOW" else "orange" if risk == "MEDIUM" else "red"
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scattermapbox(
+        lat=[lat],
+        lon=[long],
+        mode='markers',
+        marker=dict(size=12, color='blue'),
+        name="User"
+    ))
+
+    fig.add_trace(go.Scattermapbox(
+        lat=[merch_lat],
+        lon=[merch_long],
+        mode='markers',
+        marker=dict(size=12, color=color),
+        name="Merchant"
+    ))
+
+    fig.add_trace(go.Scattermapbox(
+        lat=[lat, merch_lat],
+        lon=[long, merch_long],
+        mode='lines',
+        line=dict(width=2, color=color),
+        name="Transaction Path"
+    ))
+
+    fig.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=(lat+merch_lat)/2, lon=(long+merch_long)/2),
+            zoom=2
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        showlegend=True
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 # ---------- HEADER ----------
-st.title("💳 Fraud Risk Dashboard")
-st.markdown("Smart fraud detection powered by ML 🚀")
+st.title("💳 Fraud Detection Intelligence System")
+st.markdown("Real-time ML-powered transaction risk analysis 🚀")
 
 # ---------- SIDEBAR ----------
 with st.sidebar:
@@ -29,29 +72,17 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("📍 Location")
 
-    lat = st.number_input("Your Latitude", value=28.6)
-    long = st.number_input("Your Longitude", value=77.2)
+    lat = st.number_input("User Latitude", value=28.6)
+    long = st.number_input("User Longitude", value=77.2)
     merch_lat = st.number_input("Merchant Latitude", value=28.61)
     merch_long = st.number_input("Merchant Longitude", value=77.21)
 
-    st.markdown("---")
+    run = st.button("🔍 Analyze Transaction")
 
-    # 🎯 DEMO BUTTONS
-    if st.button("🟢 Normal Example"):
-        amt, category, gender, city_pop = 120, "grocery_pos", "F", 50000
-        lat, long, merch_lat, merch_long = 28.6, 77.2, 28.61, 77.21
+# ---------- DISTANCE ----------
+distance = math.sqrt((lat-merch_lat)**2 + (long-merch_long)**2)
 
-    if st.button("🔴 Fraud Example"):
-        amt, category, gender, city_pop = 15000, "shopping_pos", "M", 500
-        lat, long, merch_lat, merch_long = 28.6, 77.2, 40.7, -74.0
-
-    run = st.button("🔍 Analyze")
-
-# ---------- HELPER ----------
-def calc_distance(lat, long, mlat, mlong):
-    return math.sqrt((lat-mlat)**2 + (long-mlong)**2)
-
-# ---------- MAIN ----------
+# ---------- API CALL ----------
 if run:
     data = {
         "amt": amt,
@@ -71,8 +102,6 @@ if run:
         prob = result["probability"]
         risk = result["risk"]
 
-        distance = calc_distance(lat, long, merch_lat, merch_long)
-
         # ---------- METRICS ----------
         col1, col2, col3 = st.columns(3)
 
@@ -82,49 +111,55 @@ if run:
 
         st.markdown("---")
 
-        # ---------- RISK BANNER ----------
+        # ---------- RISK ----------
         if risk == "HIGH":
-            st.error("🚨 HIGH FRAUD RISK — Immediate Attention Needed")
+            st.error("🚨 HIGH FRAUD RISK DETECTED")
         elif risk == "MEDIUM":
-            st.warning("⚠️ MEDIUM RISK — Review Recommended")
+            st.warning("⚠️ MEDIUM RISK TRANSACTION")
         else:
-            st.success("✅ LOW RISK — Looks Safe")
+            st.success("✅ LOW RISK TRANSACTION")
 
         # ---------- INSIGHTS ----------
-        st.subheader("🧠 Why this result?")
+        st.subheader("🧠 Risk Insights")
 
         reasons = []
 
+        if amt > 10000:
+            reasons.append("💰 High transaction amount")
+
         if distance > 20:
-            reasons.append("📍 Transaction location is far from user location")
+            reasons.append("📍 Large distance between user and merchant")
 
-        if amt > 5000:
-            reasons.append("💰 High transaction amount detected")
+        if city_pop < 1000 and amt > 3000:
+            reasons.append("🏙️ Small city high-value transaction")
 
-        if city_pop < 1000:
-            reasons.append("🏙️ Small population area — unusual behavior")
-
-        if category in ["shopping_pos", "misc_pos"]:
-            reasons.append("🛒 Risk-prone transaction category")
+        if category in ["shopping_pos", "misc_pos"] and amt > 3000:
+            reasons.append("🛒 Risk-prone category with high spend")
 
         if len(reasons) == 0:
-            st.write("No major risk signals detected")
+            st.write("No major risk signals detected.")
         else:
             for r in reasons:
-                st.write(f"- {r}")
+                st.write("•", r)
 
         # ---------- SUMMARY ----------
         st.markdown("---")
         st.subheader("📌 Summary")
 
         st.info(f"""
-        **Category:** {category}  
-        **Gender:** {gender}  
-        **City Population:** {city_pop}  
+        Category: {category}  
+        Gender: {gender}  
+        City Population: {city_pop}  
 
-        👉 **Fraud Probability:** {prob:.2f}  
-        👉 **Final Risk Level:** **{risk}**
+        👉 Probability: {prob:.2f}  
+        👉 Risk Level: **{risk}**
         """)
 
+        # ---------- MAP ----------
+        st.markdown("---")
+        st.subheader("🗺️ Transaction Map")
+
+        show_map(lat, long, merch_lat, merch_long, risk)
+
     else:
-        st.error("❌ API Error — backend issue")
+        st.error("❌ API Error")
